@@ -2,7 +2,12 @@
 
 echo "Début de la vérification de l'application..."
 
-# Simulation d'échec contrôlé : forcer la sortie avec un code d'erreur 1
-echo "Simulation d'échec : sortie avec code 1"
-echo "Fin de la vérification."
-exit 1
+if [ -f "app/index.html" ]; then
+  echo "Fichier index.html trouvé. Vérification réussie."
+  echo "Fin de la vérification."
+  exit 0
+else
+  echo "Erreur : le fichier index.html est manquant."
+  echo "Fin de la vérification."
+  exit 1
+fi
