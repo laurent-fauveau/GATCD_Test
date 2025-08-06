@@ -1,0 +1,60 @@
+---
+- name: Déploiement de l'application web avec Nginx
+  hosts: web
+  become: yes
+
+  vars:
+    app_src: "{{ playbook_dir }}/../app"
+    deploy_dir: /var/www/html/tp-app
+    nginx_vhost_path: /etc/nginx/sites-available/tp-app.conf
+    nginx_vhost_symlink: /etc/nginx/sites-enabled/tp-app.conf
+    app_domain: "{{ ansible_host }}"
+
+  tasks:
+    - name: Installer Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Créer le répertoire de destination de l'application
+      file:
+        path: "{{ deploy_dir }}"
+        state: directory
+        mode: '0755'
+        owner: www-data
+        group: www-data
+
+    - name: Copier les fichiers de l'application (avec synchronize)
+      synchronize:
+        src: "{{ app_src }}/"
+        dest: "{{ deploy_dir }}/"
+        delete: yes
+        rsync_opts:
+          - "--chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r"
+
+    - name: Déployer le vhost Nginx depuis le template
+      template:
+        src: nginx_vhost.conf.j2
+        dest: "{{ nginx_vhost_path }}"
+      notify: Reload Nginx
+
+    - name: Créer le lien symbolique dans sites-enabled
+      file:
+        src: "{{ nginx_vhost_path }}"
+        dest: "{{ nginx_vhost_symlink }}"
+        state: link
+        force: yes
+      notify: Reload Nginx
+
+    - name: S'assurer que Nginx est démarré et activé
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded

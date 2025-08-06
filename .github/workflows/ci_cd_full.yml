@@ -1,0 +1,65 @@
+name: CI_CD Full Pipeline
+
+on:
+  push:
+    branches:
+      - main   # Le workflow s’exécute à chaque push sur main
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        # On clone ton code source dans le runner
+
+      - name: Run tests (placeholder)
+        run: echo "Tests passed!"
+        # À remplacer par ton vrai travail de build/tests si besoin
+
+  deploy:
+    name: Deploy on Server
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: success()   # Ne s'exécute que si le build-and-test a réussi
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        # On récupère une nouvelle copie du code pour déploiement
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        # On charge la clé privée SSH dans l’agent du runner pour SSH
+
+      - name: Create Ansible inventory file
+        run: |
+          echo "[web]" > inventory.ini
+          echo "${{ secrets.SERVER_IP }} ansible_user=${{ secrets.SERVER_USER }}" >> inventory.ini
+        shell: bash
+        # Création dynamique du fichier d’inventaire Ansible avec l’IP et l’utilisateur
+
+      - name: Secure inventory file permissions
+        run: chmod 600 inventory.ini
+        # Permissions strictes pour le fichier sensible
+
+      - name: Install Ansible
+        run: |
+          sudo apt update
+          sudo apt install -y ansible
+        # Installation d’Ansible sur le runner Ubuntu (automatique à chaque job)
+
+      - name: Run Ansible Playbook
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: false
+        run: |
+          ansible-playbook -i inventory.ini ansible/deploy.yml
+        # Exécution du playbook pour le déploiement sur la VM
+
+      - name: Clean up inventory file
+        run: rm inventory.ini
+        # Suppression du fichier d’inventaire à la fin pour sécurité
