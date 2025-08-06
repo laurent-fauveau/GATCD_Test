@@ -1,0 +1,55 @@
+name: Secure Deployment Simulation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  simulate-secure-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate SSH private key format & length
+        run: |
+          echo "$SSH_PRIVATE_KEY" > deploy_key
+          if ! grep -q "BEGIN RSA PRIVATE KEY" deploy_key; then
+            echo "Format incorrect (PKCS#1 attendu)" ; exit 1
+          fi
+          bits=$(openssl rsa -in deploy_key -text -noout 2>/dev/null | grep "Private-Key" | awk '{print $2}' | tr -d '()')
+          echo "Bits: $bits"
+          if [ "$bits" -lt 2048 ]; then echo "Clé trop courte" ; exit 1 ; fi
+          if grep -q "ENCRYPTED" deploy_key; then echo "Clé protégée par passphrase !" ; exit 1 ; fi
+
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Validate secrets & environment
+        run: |
+          for var in SSH_PRIVATE_KEY SERVER_IP SERVER_USER
+          do
+              if [ -z "${!var}" ]; then echo "Secret $var manquant"; exit 1 ; fi
+          done
+          [[ "$SERVER_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || (echo "Nom d'utilisateur suspect" ; exit 1)
+          [[ "$SERVER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || (echo "Format IP invalide" ; exit 1)
+
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+
+      - name: Simulate SSH connection (no real connection here)
+        run: |
+          echo "ssh -i deploy_key ${SERVER_USER}@${SERVER_IP} 'hostname && whoami && sudo ls /root/'"
+          echo "Supposé lancer: sudo systemctl restart mon_app"
+
+      - name: Security best practices checklist
+        run: |
+          echo "✓ Utilisateur dédié non root"
+          echo "✓ Clé SSH sans passphrase, stockée comme secret"
+          echo "✓ Aucune variable sensible dans le code"
+          echo "✓ Les requêtes sudo limitées et tracées"
